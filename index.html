@@ -1,0 +1,561 @@
+<title>Scope Spends</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Record expenses with date and time, and see daily and weekly totals in naira.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: slim header band, then a two-column workspace — entry form left, period ledger right; stacks on phones. */
+  :root {
+    --bg: #F2F5F3;
+    --surface: #FFFFFF;
+    --ink: #13201A;
+    --muted: #5A6B63;
+    --line: #DCE4DF;
+    --accent: #0B7A4B;
+    --accent-ink: #FFFFFF;
+    --accent-soft: #E1F1E8;
+    --band: #0F2A1F;
+    --band-ink: #EAF4EE;
+    --band-muted: #9DB9AA;
+    --danger: #B3261E;
+    --danger-soft: #FBE9E7;
+    --warn-soft: #FFF4D6;
+    --warn-ink: #6B4E00;
+    --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+    --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+    --radius: 10px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0D1512; --surface: #15211C; --ink: #E4EEE8; --muted: #93A89D; --line: #26362F;
+      --accent: #3DBE82; --accent-ink: #06150E; --accent-soft: #173326;
+      --band: #08100D; --band-ink: #E4EEE8; --band-muted: #7F9A8C;
+      --danger: #F2847B; --danger-soft: #3A1A18; --warn-soft: #33290F; --warn-ink: #F0D28A;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0D1512; --surface: #15211C; --ink: #E4EEE8; --muted: #93A89D; --line: #26362F;
+    --accent: #3DBE82; --accent-ink: #06150E; --accent-soft: #173326;
+    --band: #08100D; --band-ink: #E4EEE8; --band-muted: #7F9A8C;
+    --danger: #F2847B; --danger-soft: #3A1A18; --warn-soft: #33290F; --warn-ink: #F0D28A;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body {
+    margin: 0;
+    background: var(--bg); color: var(--ink);
+    font-family: var(--font-body); font-size: 15px; line-height: 1.5;
+  }
+  body::before {
+    content: ""; position: fixed; inset: 0 0 auto;
+    height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--band);
+  }
+  .wrap {
+    max-width: 1120px; margin: 0 auto;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+  /* Header band */
+  header.band { background: var(--band); color: var(--band-ink); }
+  header .wrap {
+    padding-block: 18px 22px;
+    display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px;
+  }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .mark {
+    width: 40px; height: 40px; border-radius: 9px; background: var(--accent);
+    color: var(--accent-ink); display: grid; place-items: center;
+    font-family: var(--font-display); font-weight: 700; font-size: 22px;
+  }
+  .brand h1 { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: 1.35rem; letter-spacing: -0.01em; }
+  .brand p { margin: 0; color: var(--band-muted); font-size: 0.82rem; }
+  .clock { text-align: right; }
+  .clock .label { color: var(--band-muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; }
+  .clock .time { font-family: var(--font-mono); font-size: 1rem; }
+
+  .notice {
+    margin-top: 18px; padding: 10px 14px; border-radius: var(--radius);
+    background: var(--warn-soft); color: var(--warn-ink); font-size: 0.86rem;
+  }
+
+  main.wrap { padding-block: 22px 48px; }
+  .grid { display: grid; grid-template-columns: minmax(0, 340px) minmax(0, 1fr); gap: 22px; align-items: start; }
+  @media (max-width: 820px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+
+  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+  .panel-head { padding: 16px 18px 0; }
+  .panel h2 { margin: 0; font-family: var(--font-display); font-weight: 600; font-size: 1.1rem; }
+  .panel .sub { margin: 2px 0 0; color: var(--muted); font-size: 0.84rem; }
+
+  /* Form */
+  form { padding: 16px 18px 18px; display: grid; gap: 14px; }
+  label { display: grid; gap: 6px; font-size: 0.82rem; font-weight: 500; color: var(--muted); }
+  input {
+    font: inherit; color: var(--ink); background: var(--bg);
+    border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; width: 100%;
+  }
+  input:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .amount-field { position: relative; }
+  .amount-field span {
+    position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+    font-family: var(--font-mono); color: var(--muted);
+  }
+  .amount-field input { padding-left: 30px; font-family: var(--font-mono); }
+  .stamp { font-size: 0.8rem; color: var(--muted); }
+  .stamp b { font-family: var(--font-mono); font-weight: 500; color: var(--ink); }
+  .error { color: var(--danger); font-size: 0.84rem; min-height: 1.2em; margin: -4px 0 0; }
+
+  button {
+    font: inherit; cursor: pointer; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--surface); color: var(--ink); padding: 9px 14px;
+  }
+  button:hover { border-color: var(--muted); }
+  .primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; padding: 11px 14px; }
+  .primary:hover { filter: brightness(1.06); border-color: var(--accent); }
+  .primary:disabled { opacity: 0.6; cursor: progress; }
+
+  .quick { display: flex; flex-wrap: wrap; gap: 6px; }
+  .quick button { padding: 5px 10px; font-size: 0.8rem; border-radius: 999px; }
+
+  /* Ledger */
+  .toolbar {
+    padding: 14px 18px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between;
+    border-bottom: 1px solid var(--line);
+  }
+  .tabs { display: inline-flex; background: var(--bg); border: 1px solid var(--line); border-radius: 9px; padding: 3px; }
+  .tabs button { border: 0; background: transparent; padding: 6px 14px; border-radius: 6px; font-size: 0.88rem; color: var(--muted); }
+  .tabs button[aria-pressed="true"] { background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,0.08); }
+  .nav { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .nav button { padding: 6px 10px; }
+  .nav input { width: auto; padding: 6px 10px; }
+
+  .summary { padding: 18px; display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-end; }
+  .summary .period { flex: 1 1 100%; color: var(--muted); font-size: 0.86rem; margin-bottom: -16px; }
+  .stat .k { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+  .stat .v { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 1.15rem; }
+  .stat.big .v { font-family: var(--font-display); font-weight: 700; font-size: 2.2rem; letter-spacing: -0.02em; line-height: 1.1; }
+
+  /* Week chart */
+  .week { padding: 0 18px 18px; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; }
+  .day { display: grid; gap: 6px; text-align: center; }
+  .day .bar-box { height: 90px; display: flex; align-items: flex-end; background: var(--bg); border-radius: 6px; overflow: hidden; }
+  .day .bar { width: 100%; background: var(--accent); border-radius: 6px 6px 0 0; min-height: 0; transition: height .3s ease; }
+  .day.today .bar-box { outline: 1px dashed var(--accent); outline-offset: 2px; }
+  .day .dn { font-size: 0.75rem; color: var(--muted); }
+  .day .dv { font-family: var(--font-mono); font-size: 0.72rem; overflow-wrap: anywhere; }
+
+  /* List */
+  .list { border-top: 1px solid var(--line); }
+  .group-head {
+    display: flex; justify-content: space-between; gap: 12px; padding: 10px 18px;
+    background: var(--bg); font-size: 0.82rem; font-weight: 600; color: var(--muted);
+  }
+  .row {
+    display: grid; grid-template-columns: 64px minmax(0, 1fr) auto auto; gap: 12px; align-items: center;
+    padding: 11px 18px; border-top: 1px solid var(--line);
+  }
+  .row .t { font-family: var(--font-mono); font-size: 0.82rem; color: var(--muted); }
+  .row .d { overflow-wrap: anywhere; }
+  .row .a { font-family: var(--font-mono); font-variant-numeric: tabular-nums; text-align: right; }
+  .row .del { padding: 4px 9px; font-size: 0.78rem; color: var(--muted); }
+  .row .del.confirm { background: var(--danger-soft); color: var(--danger); border-color: var(--danger); }
+  .empty { padding: 34px 18px; text-align: center; color: var(--muted); }
+  .empty b { display: block; color: var(--ink); font-family: var(--font-display); font-size: 1.05rem; margin-bottom: 4px; }
+
+  .foot { padding: 14px 18px; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; align-items: center; }
+  .foot .total { font-weight: 600; }
+  .foot a.export { color: var(--accent); font-weight: 600; text-decoration: none; }
+  .foot a.export:hover { text-decoration: underline; }
+
+  .toast {
+    position: fixed; left: 50%; transform: translateX(-50%);
+    bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+    background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 8px; font-size: 0.88rem;
+  }
+  @media (max-width: 480px) {
+    .row { grid-template-columns: 52px minmax(0, 1fr) auto; }
+    .row .del { grid-column: 3; }
+    .row .a { grid-column: 2 / 4; text-align: left; margin-top: -6px; }
+    .stat.big .v { font-size: 1.8rem; }
+  }
+
+  .header-actions { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+  .theme-toggle {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: transparent; color: var(--band-ink); border-color: var(--band-muted);
+    font-size: 0.82rem; padding: 8px 11px; white-space: nowrap;
+  }
+  .theme-toggle:hover { border-color: var(--band-ink); }
+  .theme-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  @media (max-width: 480px) {
+    .header-actions { width: 100%; justify-content: space-between; }
+    .clock { text-align: left; }
+  }
+  @media (prefers-reduced-motion: reduce) { .day .bar { transition: none; } }
+</style>
+
+<header class="band">
+  <div class="wrap">
+    <div class="brand">
+      <div class="mark" aria-hidden="true">$</div>
+      <div>
+        <h1>Expenses Tracker</h1>
+        <p>Spend wisely with Scope_spends</p>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button type="button" id="themeToggle" class="theme-toggle" aria-label="Switch to dark mode" aria-pressed="false">
+        <span id="themeIcon" aria-hidden="true">🌙</span>
+        <span id="themeLabel">Dark mode</span>
+      </button>
+      <div class="clock">
+        <div class="label">Now</div>
+        <div class="time" id="clock">—</div>
+      </div>
+    </div>
+  </div>
+</header>
+
+  <div class="grid" style="margin-top:18px">
+    <section class="panel" aria-labelledby="addTitle">
+      <div class="panel-head">
+        <h2 id="addTitle">Input value spent</h2>
+        <p class="sub">The date and time are added when you save.</p>
+      </div>
+      <form id="addForm" novalidate>
+        <label for="desc">Description
+          <input id="desc" name="description" maxlength="200" placeholder="Eg: School fees" autocomplete="off" required>
+        </label>
+        <label for="amount">Amount
+          <div class="amount-field">
+            <span>$</span>
+            <input id="amount" name="amount" inputmode="decimal" placeholder="$0.00" autocomplete="off" required>
+          </div>
+        </label>
+        <div class="quick" aria-label="Quick amounts">
+          <button type="button" data-amt="500">$500</button>
+          <button type="button" data-amt="1000">$1,000</button>
+          <button type="button" data-amt="2000">$2,000</button>
+          <button type="button" data-amt="5000">$5,000</button>
+          <button type="button" data-amt="10000">$10,000</button>
+        </div>
+        <p class="error" id="formError" role="alert"></p>
+        <button class="primary" type="submit" id="saveBtn">Save expense</button>
+        <div class="stamp">Will be recorded<b id="stampPreview">—</b></div>
+      </form>
+    </section>
+
+    <section class="panel" aria-labelledby="ledgerTitle">
+      <h2 id="ledgerTitle" hidden>Expenses</h2>
+      <div class="toolbar">
+        <div class="tabs" role="group" aria-label="Period">
+          <button type="button" data-view="daily" aria-pressed="true">Daily</button>
+          <button type="button" data-view="weekly" aria-pressed="false">Weekly</button>
+          <button type="button" data-view="all" aria-pressed="false">All</button>
+        </div>
+        <div class="nav" id="nav">
+          <button type="button" id="prev" aria-label="Previous period">‹</button>
+          <input type="date" id="pickDate" aria-label="Choose date">
+          <button type="button" id="next" aria-label="Next period">›</button>
+          <button type="button" id="today">Today</button>
+        </div>
+      </div>
+
+      <div class="summary">
+        <div class="period" id="periodLabel"></div>
+        <div class="stat big"><div class="k">Total spent</div><div class="v" id="sTotal">$0.00</div></div>
+        <div class="stat"><div class="k">Items</div><div class="v" id="sCount">0</div></div>
+        <div class="stat"><div class="k" id="sAvgLabel">Average item</div><div class="v" id="sAvg">$0.00</div></div>
+        <div class="stat"><div class="k">Largest</div><div class="v" id="sMax">—</div></div>
+      </div>
+
+      <div class="week" id="week" hidden></div>
+      <div class="list" id="list"></div>
+
+      <div class="foot">
+        <span class="total" id="footTotal"></span>
+        <a class="export" id="exportLink" href="/api/export">Download CSV</a>
+      </div>
+    </section>
+  </div>
+</main>
+
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+
+  // ---------- theme: saved preference, with system preference as the default ----------
+  const THEME_KEY = "scope-spends-theme";
+  const themeToggle = $("themeToggle");
+  function applyTheme(theme) {
+    document.documentElement.dataset.theme = theme;
+    const dark = theme === "dark";
+    themeToggle.setAttribute("aria-pressed", String(dark));
+    themeToggle.setAttribute("aria-label", dark ? "Switch to light mode" : "Switch to dark mode");
+    $("themeIcon").textContent = dark ? "☀️" : "🌙";
+    $("themeLabel").textContent = dark ? "Light mode" : "Dark mode";
+  }
+  function savedTheme() {
+    try {
+      const saved = localStorage.getItem(THEME_KEY);
+      if (saved === "light" || saved === "dark") return saved;
+    } catch (e) {}
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+  applyTheme(savedTheme());
+  themeToggle.addEventListener("click", () => {
+    const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+    applyTheme(next);
+    try { localStorage.setItem(THEME_KEY, next); } catch (e) {}
+  });
+
+  const naira = new Intl.NumberFormat("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const money = (n) => "$" + naira.format(n);
+  const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+  const state = { view: "daily", anchor: todayStr(), expenses: [], demo: false };
+
+  // ---------- date helpers (local time) ----------
+  function pad(n) { return String(n).padStart(2, "0"); }
+  function toStr(d) { return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
+  function todayStr() { return toStr(new Date()); }
+  function parse(s) { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); }
+  function addDays(s, n) { const d = parse(s); d.setDate(d.getDate() + n); return toStr(d); }
+  function mondayOf(s) { const d = parse(s); const wd = (d.getDay() + 6) % 7; d.setDate(d.getDate() - wd); return toStr(d); }
+  function longDate(s) { return parse(s).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" }); }
+  function shortDate(s) { return parse(s).toLocaleDateString("en-GB", { day: "numeric", month: "short" }); }
+
+  // ---------- storage: server API, or browser-only preview ----------
+  const DEMO_KEY = "naira-expenses-demo";
+  function demoSeed() {
+    const mon = mondayOf(todayStr());
+    const t = todayStr();
+    const rows = [
+      [0, "08:15:02", "Fuel (example)", 6500], [0, "13:40:10", "Lunch (example)", 2800],
+      [1, "09:05:44", "Data subscription (example)", 3500], [2, "18:22:31", "Printing (example)", 1200],
+      [3, "07:55:00", "Transport (example)", 1500], [3, "12:10:19", "Office supplies (example)", 4200],
+    ];
+    const out = [];
+    rows.forEach(([off, time, d, a]) => { const date = addDays(mon, off); if (date <= t) out.push({ date, time, description: d, amount: a }); });
+    out.push({ date: t, time: "10:30:00", description: "Water & snacks (example)", amount: 900 });
+    return out.map((r, i) => ({ id: i, ...r }));
+  }
+  function demoLoad() {
+    try { const raw = localStorage.getItem(DEMO_KEY); if (raw) return JSON.parse(raw); } catch (e) {}
+    return demoSeed();
+  }
+  function demoSave() { try { localStorage.setItem(DEMO_KEY, JSON.stringify(state.expenses)); } catch (e) {} }
+
+  async function load() {
+    try {
+      const res = await fetch("api/expenses", { headers: { Accept: "application/json" } });
+      const type = res.headers.get("content-type") || "";
+      if (!res.ok || !type.includes("application/json")) throw new Error("no api");
+      state.expenses = await res.json();
+      state.demo = false;
+    } catch (e) {
+      state.demo = true;
+      state.expenses = demoLoad();
+    }
+    $("demoNotice").hidden = !state.demo;
+    $("exportLink").hidden = state.demo;
+    render();
+  }
+
+  async function addExpense(description, amount) {
+    if (state.demo) {
+      const now = new Date();
+      const id = state.expenses.reduce((m, r) => Math.max(m, r.id), -1) + 1;
+      const row = { id, date: toStr(now), time: pad(now.getHours()) + ":" + pad(now.getMinutes()) + ":" + pad(now.getSeconds()), description, amount };
+      state.expenses.push(row); demoSave(); return row;
+    }
+    const res = await fetch("api/expenses", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ description, amount }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.error || "The expense couldn't be saved. Check your connection and try again.");
+    await reloadFromServer();
+    return body;
+  }
+
+  async function deleteExpense(id) {
+    if (state.demo) { state.expenses = state.expenses.filter((r) => r.id !== id); demoSave(); return; }
+    const res = await fetch("api/expenses/" + id, { method: "DELETE" });
+    if (!res.ok) { const b = await res.json().catch(() => ({})); throw new Error(b.error || "Couldn't delete that expense."); }
+    await reloadFromServer(); // ids are file positions, so refresh after a delete
+  }
+
+  async function reloadFromServer() {
+    const res = await fetch("api/expenses");
+    if (res.ok) state.expenses = await res.json();
+  }
+
+  // ---------- rendering ----------
+  function periodRange() {
+    if (state.view === "daily") return [state.anchor, state.anchor];
+    if (state.view === "weekly") { const m = mondayOf(state.anchor); return [m, addDays(m, 6)]; }
+    return ["0000-01-01", "9999-12-31"];
+  }
+
+  function render() {
+    document.querySelectorAll(".tabs button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.view === state.view)));
+    $("nav").style.visibility = state.view === "all" ? "hidden" : "visible";
+    $("pickDate").value = state.anchor;
+
+    const [start, end] = periodRange();
+    const items = state.expenses
+      .filter((r) => r.date >= start && r.date <= end)
+      .sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
+    const total = items.reduce((s, r) => s + Number(r.amount), 0);
+
+    let label;
+    if (state.view === "daily") label = longDate(start) + (start === todayStr() ? " · Today" : "");
+    else if (state.view === "weekly") label = "Week of " + shortDate(start) + " – " + shortDate(end) + " " + parse(end).getFullYear();
+    else label = "All recorded expenses";
+    $("periodLabel").textContent = label;
+
+    $("sTotal").textContent = money(total);
+    $("sCount").textContent = items.length;
+    if (state.view === "weekly") {
+      $("sAvgLabel").textContent = "Daily average";
+      $("sAvg").textContent = money(total / 7);
+    } else {
+      $("sAvgLabel").textContent = "Average item";
+      $("sAvg").textContent = money(items.length ? total / items.length : 0);
+    }
+    const max = items.reduce((m, r) => (!m || r.amount > m.amount ? r : m), null);
+    $("sMax").textContent = max ? money(max.amount) : "—";
+    $("footTotal").textContent = items.length + (items.length === 1 ? " item" : " items") + " · Total " + money(total);
+
+    renderWeek(start, items);
+    renderList(items);
+  }
+
+  function renderWeek(start, items) {
+    const box = $("week");
+    box.hidden = state.view !== "weekly";
+    if (box.hidden) return;
+    const sums = Array.from({ length: 7 }, (_, i) => {
+      const d = addDays(start, i);
+      return { d, v: items.filter((r) => r.date === d).reduce((s, r) => s + Number(r.amount), 0) };
+    });
+    const peak = Math.max(...sums.map((s) => s.v), 1);
+    box.innerHTML = "";
+    sums.forEach((s, i) => {
+      const el = document.createElement("button");
+      el.type = "button";
+      el.className = "day" + (s.d === todayStr() ? " today" : "");
+      el.style.cssText = "border:0;background:none;padding:0;color:inherit";
+      el.setAttribute("aria-label", DAYS[i] + " " + shortDate(s.d) + ": " + money(s.v) + ". Open this day");
+      el.innerHTML =
+        '<div class="bar-box"><div class="bar" style="height:' + (s.v / peak) * 100 + '%"></div></div>' +
+        '<div class="dn">' + DAYS[i] + "</div>" +
+        '<div class="dv">' + (s.v ? "₦" + Math.round(s.v).toLocaleString("en-NG") : "–") + "</div>";
+      el.addEventListener("click", () => { state.view = "daily"; state.anchor = s.d; render(); });
+      box.appendChild(el);
+    });
+  }
+
+  function renderList(items) {
+    const list = $("list");
+    list.innerHTML = "";
+    if (!items.length) {
+      list.innerHTML = '<div class="empty"><b>No expenses for this period</b>Use the form to record one — it gets today\'s date and the current time.</div>';
+      return;
+    }
+    const groups = {};
+    items.forEach((r) => (groups[r.date] = groups[r.date] || []).push(r));
+    Object.keys(groups).sort().forEach((date) => {
+      const rows = groups[date];
+      const sub = rows.reduce((s, r) => s + Number(r.amount), 0);
+      const head = document.createElement("div");
+      head.className = "group-head";
+      head.innerHTML = "<span>" + longDate(date) + "</span><span class=\"num\">" + money(sub) + "</span>";
+      list.appendChild(head);
+      rows.forEach((r) => {
+        const row = document.createElement("div");
+        row.className = "row";
+        const t = document.createElement("span"); t.className = "t"; t.textContent = r.time.slice(0, 5);
+        const d = document.createElement("span"); d.className = "d"; d.textContent = r.description;
+        const a = document.createElement("span"); a.className = "a"; a.textContent = money(Number(r.amount));
+        const del = document.createElement("button"); del.type = "button"; del.className = "del"; del.textContent = "Delete";
+        del.setAttribute("aria-label", "Delete " + r.description);
+        let armed = false, timer;
+        del.addEventListener("click", async () => {
+          if (!armed) {
+            armed = true; del.classList.add("confirm"); del.textContent = "Confirm";
+            timer = setTimeout(() => { armed = false; del.classList.remove("confirm"); del.textContent = "Delete"; }, 3000);
+            return;
+          }
+          clearTimeout(timer); del.disabled = true;
+          try { await deleteExpense(r.id); toast("Deleted " + r.description); render(); }
+          catch (e) { toast(e.message); del.disabled = false; }
+        });
+        row.append(t, d, a, del);
+        list.appendChild(row);
+      });
+    });
+  }
+
+  let toastTimer;
+  function toast(msg) {
+    const el = $("toast"); el.textContent = msg; el.hidden = false;
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => (el.hidden = true), 2600);
+  }
+
+  // ---------- events ----------
+  document.querySelectorAll(".tabs button").forEach((b) =>
+    b.addEventListener("click", () => { state.view = b.dataset.view; render(); }));
+  $("prev").addEventListener("click", () => { state.anchor = addDays(state.anchor, state.view === "weekly" ? -7 : -1); render(); });
+  $("next").addEventListener("click", () => { state.anchor = addDays(state.anchor, state.view === "weekly" ? 7 : 1); render(); });
+  $("today").addEventListener("click", () => { state.anchor = todayStr(); render(); });
+  $("pickDate").addEventListener("change", (e) => { if (e.target.value) { state.anchor = e.target.value; render(); } });
+  document.querySelectorAll(".quick button").forEach((b) =>
+    b.addEventListener("click", () => { $("amount").value = b.dataset.amt; $("amount").focus(); }));
+
+  $("addForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const err = $("formError");
+    const description = $("desc").value.trim();
+    const raw = $("amount").value.replace(/[,₦\s]/g, "");
+    const amount = Number(raw);
+    if (!description) { err.textContent = "Add a description, e.g. \"Fuel\"."; $("desc").focus(); return; }
+    if (raw === "" || !isFinite(amount) || amount < 0) { err.textContent = "Enter an amount of 0 or more, e.g. 2500."; $("amount").focus(); return; }
+    err.textContent = "";
+    const btn = $("saveBtn"); btn.disabled = true; btn.textContent = "Saving…";
+    try {
+      const row = await addExpense(description, Math.round(amount * 100) / 100);
+      $("addForm").reset();
+      state.anchor = row.date || todayStr();
+      render();
+      toast("Saved " + money(amount) + " at " + String(row.time || "").slice(0, 5));
+      $("desc").focus();
+    } catch (ex) {
+      err.textContent = ex.message;
+    } finally {
+      btn.disabled = false; btn.textContent = "Save expense";
+    }
+  });
+
+  function tick() {
+    const now = new Date();
+    const txt = now.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric" }) +
+      " · " + now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    $("clock").textContent = txt;
+    $("stampPreview").textContent = toStr(now) + " " + now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  }
+  tick(); setInterval(tick, 1000);
+
+  load();
+})();
+</script>
